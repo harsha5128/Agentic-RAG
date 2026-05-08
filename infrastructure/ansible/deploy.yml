@@ -1,0 +1,152 @@
+---
+# Ansible Playbook for Agentic RAG Deployment
+- name: Deploy Agentic RAG Platform
+  hosts: all
+  become: yes
+  vars:
+    project_name: agentic-rag
+    docker_compose_version: "2.20.0"
+    services:
+      - document-ingestion
+      - document-parsing
+      - embedding-service
+      - retrieval-service
+      - agent-orchestration
+      - query-processing
+      - evaluation-service
+
+  tasks:
+    # Install dependencies
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install required packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - software-properties-common
+          - git
+        state: present
+
+    # Install Docker
+    - name: Add Docker GPG key
+      shell: curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+
+    - name: Add Docker repository
+      shell: echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+    - name: Install Docker
+      apt:
+        name: docker-ce
+        state: present
+        update_cache: yes
+
+    - name: Start Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    # Install Docker Compose
+    - name: Download Docker Compose
+      shell: curl -L "https://github.com/docker/compose/releases/download/v{{ docker_compose_version }}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+
+    - name: Make Docker Compose executable
+      file:
+        path: /usr/local/bin/docker-compose
+        mode: "0755"
+
+    # Clone repository
+    - name: Clone RAG project repository
+      git:
+        repo: https://github.com/harsha5128/Agentic-RAG.git
+        dest: /opt/agentic-rag
+        version: main
+
+    # Copy environment file
+    - name: Copy .env file
+      template:
+        src: .env.j2
+        dest: /opt/agentic-rag/.env
+        mode: "0600"
+
+    # Create required directories
+    - name: Create data directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - /opt/agentic-rag/data/mongodb
+        - /opt/agentic-rag/data/redis
+        - /opt/agentic-rag/data/opensearch
+
+    # Start services with Docker Compose
+    - name: Start infrastructure services
+      shell: |
+        cd /opt/agentic-rag
+        docker-compose up -d mongodb redis rabbitmq opensearch prometheus grafana jaeger
+      register: compose_up_result
+
+    - name: Wait for services to be healthy
+      shell: docker-compose ps | grep "healthy"
+      register: result
+      retries: 30
+      delay: 5
+      until: result.rc == 0
+      working_directory: /opt/agentic-rag
+
+    # Build and start application services
+    - name: Build Docker images
+      shell: |
+        cd /opt/agentic-rag
+        docker-compose build
+      register: build_result
+
+    - name: Start application services
+      shell: |
+        cd /opt/agentic-rag
+        docker-compose up -d document-ingestion document-parsing embedding-service retrieval-service agent-orchestration query-processing evaluation-service nginx
+      register: app_up_result
+
+    # Verify deployment
+    - name: Check service health
+      shell: |
+        for service in document-ingestion embedding-service agent-orchestration; do
+          status=$(curl -s http://localhost:8000/health | grep -o '"status":"healthy"')
+          if [ -z "$status" ]; then
+            echo "Service $service is unhealthy"
+          fi
+        done
+
+    # Configure monitoring
+    - name: Copy Prometheus configuration
+      copy:
+        src: prometheus.yml
+        dest: /opt/agentic-rag/monitoring/prometheus.yml
+        mode: "0644"
+
+    - name: Copy Grafana dashboard
+      copy:
+        src: grafana-dashboards/
+        dest: /opt/agentic-rag/monitoring/grafana-dashboards/
+        mode: "0644"
+
+    # Configure logging
+    - name: Setup log rotation
+      template:
+        src: logrotate.j2
+        dest: /etc/logrotate.d/agentic-rag
+        mode: "0644"
+
+  handlers:
+    - name: Restart Docker
+      systemd:
+        name: docker
+        state: restarted

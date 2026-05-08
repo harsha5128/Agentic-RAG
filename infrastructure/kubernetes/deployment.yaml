@@ -1,0 +1,235 @@
+"""
+Kubernetes Deployment Manifests for Agentic RAG
+"""
+
+# Document Ingestion Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: document-ingestion
+  labels:
+    app: document-ingestion
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: document-ingestion
+  template:
+    metadata:
+      labels:
+        app: document-ingestion
+    spec:
+      containers:
+      - name: document-ingestion
+        image: <ECR_URI>/agentic-rag/document-ingestion:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: SERVICE_NAME
+          value: document-ingestion
+        - name: MONGODB_URI
+          valueFrom:
+            secretKeyRef:
+              name: rag-secrets
+              key: mongodb-uri
+        - name: AWS_REGION
+          value: us-east-1
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: rag-secrets
+              key: openai-api-key
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: document-ingestion
+spec:
+  selector:
+    app: document-ingestion
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
+  type: ClusterIP
+
+---
+# Embedding Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embedding-service
+  labels:
+    app: embedding-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: embedding-service
+  template:
+    metadata:
+      labels:
+        app: embedding-service
+    spec:
+      containers:
+      - name: embedding-service
+        image: <ECR_URI>/agentic-rag/embedding-service:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: SERVICE_NAME
+          value: embedding-service
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: rag-secrets
+              key: openai-api-key
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: embedding-service
+spec:
+  selector:
+    app: embedding-service
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
+  type: ClusterIP
+
+---
+# Agent Orchestration Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-orchestration
+  labels:
+    app: agent-orchestration
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: agent-orchestration
+  template:
+    metadata:
+      labels:
+        app: agent-orchestration
+    spec:
+      containers:
+      - name: agent-orchestration
+        image: <ECR_URI>/agentic-rag/agent-orchestration:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: SERVICE_NAME
+          value: agent-orchestration
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: rag-secrets
+              key: openai-api-key
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-orchestration
+spec:
+  selector:
+    app: agent-orchestration
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
+  type: ClusterIP
+
+---
+# API Gateway (Nginx Ingress)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rag-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: rag.example.com
+    http:
+      paths:
+      - path: /ingest
+        pathType: Prefix
+        backend:
+          service:
+            name: document-ingestion
+            port:
+              number: 80
+      - path: /embed
+        pathType: Prefix
+        backend:
+          service:
+            name: embedding-service
+            port:
+              number: 80
+      - path: /orchestrate
+        pathType: Prefix
+        backend:
+          service:
+            name: agent-orchestration
+            port:
+              number: 80
+
+---
+# Secrets
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rag-secrets
+type: Opaque
+stringData:
+  mongodb-uri: mongodb://admin:password@mongodb:27017/rag_db
+  openai-api-key: sk-xxxxx
+  pinecone-api-key: xxxxx
+
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agentic-rag

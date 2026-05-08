@@ -1,0 +1,54 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'agentic-rag-monitor'
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files:
+  - "alert_rules.yml"
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'document-ingestion'
+    static_configs:
+      - targets: ['document-ingestion:8000']
+
+  - job_name: 'document-parsing'
+    static_configs:
+      - targets: ['document-parsing:8000']
+
+  - job_name: 'embedding-service'
+    static_configs:
+      - targets: ['embedding-service:8000']
+
+  - job_name: 'retrieval-service'
+    static_configs:
+      - targets: ['retrieval-service:8000']
+
+  - job_name: 'agent-orchestration'
+    static_configs:
+      - targets: ['agent-orchestration:8000']
+
+  - job_name: 'query-processing'
+    static_configs:
+      - targets: ['query-processing:8000']
+
+  - job_name: 'evaluation-service'
+    static_configs:
+      - targets: ['evaluation-service:8000']
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+
+  - job_name: 'opensearch'
+    static_configs:
+      - targets: ['opensearch:9200']

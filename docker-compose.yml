@@ -1,0 +1,350 @@
+version: '3.9'
+
+services:
+  # Core Infrastructure
+  mongodb:
+    image: mongo:7.0
+    container_name: agentic-rag-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: changeme
+      MONGO_INITDB_DATABASE: rag_db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./infrastructure/mongodb-init/init.js:/docker-entrypoint-initdb.d/init.js:ro
+    networks:
+      - rag-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/rag_db -u admin -p changeme --authenticationDatabase admin
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: agentic-rag-redis
+    command: redis-server --requirepass redispass123
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - rag-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: agentic-rag-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: rabbitmqpass123
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - rag-network
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # OpenSearch for logs and metrics
+  opensearch:
+    image: opensearchproject/opensearch:2.10.0
+    container_name: agentic-rag-opensearch
+    environment:
+      - discovery.type=single-node
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=OpenSearch@123
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    networks:
+      - rag-network
+    healthcheck:
+      test: curl -s http://localhost:9200 >/dev/null || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.10.0
+    container_name: agentic-rag-dashboards
+    ports:
+      - "5601:5601"
+    environment:
+      - OPENSEARCH_HOSTS=["https://opensearch:9200"]
+      - OPENSEARCH_SSL_VERIFICATIONMODE=none
+    depends_on:
+      - opensearch
+    networks:
+      - rag-network
+
+  # Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: agentic-rag-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    networks:
+      - rag-network
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: agentic-rag-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana-dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+    depends_on:
+      - prometheus
+    networks:
+      - rag-network
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: agentic-rag-jaeger
+    ports:
+      - "6831:6831/udp"
+      - "16686:16686"
+    environment:
+      COLLECTOR_ZIPKIN_HOST_PORT: ":9411"
+    networks:
+      - rag-network
+
+  # Microservices
+  document-ingestion:
+    build:
+      context: ./services/document_ingestion
+      dockerfile: Dockerfile
+    container_name: rag-document-ingestion
+    environment:
+      SERVICE_NAME: document-ingestion
+      MONGODB_URI: mongodb://admin:changeme@mongodb:27017/rag_db?authSource=admin
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: admin
+      RABBITMQ_PASSWORD: rabbitmqpass123
+      AWS_REGION: us-east-1
+      LOG_LEVEL: INFO
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+    ports:
+      - "8001:8000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - rag-network
+
+  document-parsing:
+    build:
+      context: ./services/document_parsing
+      dockerfile: Dockerfile
+    container_name: rag-document-parsing
+    environment:
+      SERVICE_NAME: document-parsing
+      MONGODB_URI: mongodb://admin:changeme@mongodb:27017/rag_db?authSource=admin
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: admin
+      RABBITMQ_PASSWORD: rabbitmqpass123
+      LOG_LEVEL: INFO
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+    ports:
+      - "8002:8000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - rag-network
+
+  embedding-service:
+    build:
+      context: ./services/embedding_service
+      dockerfile: Dockerfile
+    container_name: rag-embedding
+    environment:
+      SERVICE_NAME: embedding-service
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      MONGODB_URI: mongodb://admin:changeme@mongodb:27017/rag_db?authSource=admin
+      REDIS_HOST: redis
+      REDIS_PASSWORD: redispass123
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: admin
+      RABBITMQ_PASSWORD: rabbitmqpass123
+      LOG_LEVEL: INFO
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+    ports:
+      - "8003:8000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - rag-network
+
+  retrieval-service:
+    build:
+      context: ./services/retrieval_service
+      dockerfile: Dockerfile
+    container_name: rag-retrieval
+    environment:
+      SERVICE_NAME: retrieval-service
+      MONGODB_URI: mongodb://admin:changeme@mongodb:27017/rag_db?authSource=admin
+      REDIS_HOST: redis
+      REDIS_PASSWORD: redispass123
+      PINECONE_API_KEY: ${PINECONE_API_KEY}
+      PINECONE_ENVIRONMENT: ${PINECONE_ENVIRONMENT}
+      WEAVIATE_URL: http://weaviate:8080
+      LOG_LEVEL: INFO
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+    ports:
+      - "8004:8000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - rag-network
+
+  agent-orchestration:
+    build:
+      context: ./services/agent_orchestration
+      dockerfile: Dockerfile
+    container_name: rag-agent-orchestration
+    environment:
+      SERVICE_NAME: agent-orchestration
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      MONGODB_URI: mongodb://admin:changeme@mongodb:27017/rag_db?authSource=admin
+      REDIS_HOST: redis
+      REDIS_PASSWORD: redispass123
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: admin
+      RABBITMQ_PASSWORD: rabbitmqpass123
+      LOG_LEVEL: INFO
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+    ports:
+      - "8005:8000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - rag-network
+
+  query-processing:
+    build:
+      context: ./services/query_processing
+      dockerfile: Dockerfile
+    container_name: rag-query-processing
+    environment:
+      SERVICE_NAME: query-processing
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      MONGODB_URI: mongodb://admin:changeme@mongodb:27017/rag_db?authSource=admin
+      REDIS_HOST: redis
+      REDIS_PASSWORD: redispass123
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: admin
+      RABBITMQ_PASSWORD: rabbitmqpass123
+      LOG_LEVEL: INFO
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+    ports:
+      - "8006:8000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - rag-network
+
+  evaluation-service:
+    build:
+      context: ./services/evaluation_service
+      dockerfile: Dockerfile
+    container_name: rag-evaluation
+    environment:
+      SERVICE_NAME: evaluation-service
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      MONGODB_URI: mongodb://admin:changeme@mongodb:27017/rag_db?authSource=admin
+      REDIS_HOST: redis
+      REDIS_PASSWORD: redispass123
+      LOG_LEVEL: INFO
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+    ports:
+      - "8007:8000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - rag-network
+
+  # API Gateway (Nginx)
+  nginx:
+    image: nginx:alpine
+    container_name: rag-api-gateway
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infrastructure/certs:/etc/nginx/certs:ro
+    depends_on:
+      - document-ingestion
+      - embedding-service
+      - retrieval-service
+      - agent-orchestration
+      - query-processing
+      - evaluation-service
+    networks:
+      - rag-network
+
+volumes:
+  mongodb_data:
+  redis_data:
+  rabbitmq_data:
+  opensearch_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  rag-network:
+    driver: bridge
