@@ -11,8 +11,11 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy shared utilities
+COPY common /app/common
+
 # Copy application code
-COPY . /app/
+COPY services/document_ingestion /app/
 
 # Expose port
 EXPOSE 8000

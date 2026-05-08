@@ -5,7 +5,11 @@ WORKDIR /app
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . /app/
+# Copy shared utilities
+COPY common /app/common
+
+# Copy service code
+COPY services/embedding_service /app/
 
 EXPOSE 8000
 

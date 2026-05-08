@@ -10,7 +10,10 @@ from datetime import datetime
 import sys
 from pathlib import Path
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.sqlite import SqliteSaver
+try:
+    from langgraph.checkpoint.sqlite import SqliteSaver
+except ImportError:
+    from langgraph.checkpoint import SqliteSaver
 from langchain.chat_models import ChatOpenAI
 from langchain.tools import tool
 import redis.asyncio as redis

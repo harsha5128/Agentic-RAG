@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   # Core Infrastructure
   mongodb:
@@ -118,7 +116,7 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana-dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./monitoring/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
     depends_on:
       - prometheus
     networks:
@@ -139,8 +137,8 @@ services:
   # Microservices
   document-ingestion:
     build:
-      context: ./services/document_ingestion
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/document_ingestion/Dockerfile
     container_name: rag-document-ingestion
     environment:
       SERVICE_NAME: document-ingestion
@@ -163,8 +161,8 @@ services:
 
   document-parsing:
     build:
-      context: ./services/document_parsing
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/document_parsing/Dockerfile
     container_name: rag-document-parsing
     environment:
       SERVICE_NAME: document-parsing
@@ -186,8 +184,8 @@ services:
 
   embedding-service:
     build:
-      context: ./services/embedding_service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/embedding_service/Dockerfile
     container_name: rag-embedding
     environment:
       SERVICE_NAME: embedding-service
@@ -214,8 +212,8 @@ services:
 
   retrieval-service:
     build:
-      context: ./services/retrieval_service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/retrieval_service/Dockerfile
     container_name: rag-retrieval
     environment:
       SERVICE_NAME: retrieval-service
@@ -239,8 +237,8 @@ services:
 
   agent-orchestration:
     build:
-      context: ./services/agent_orchestration
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/agent_orchestration/Dockerfile
     container_name: rag-agent-orchestration
     environment:
       SERVICE_NAME: agent-orchestration
@@ -268,8 +266,8 @@ services:
 
   query-processing:
     build:
-      context: ./services/query_processing
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/query_processing/Dockerfile
     container_name: rag-query-processing
     environment:
       SERVICE_NAME: query-processing
@@ -296,8 +294,8 @@ services:
 
   evaluation-service:
     build:
-      context: ./services/evaluation_service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/evaluation_service/Dockerfile
     container_name: rag-evaluation
     environment:
       SERVICE_NAME: evaluation-service
