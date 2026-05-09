@@ -147,6 +147,10 @@ services:
       RABBITMQ_USER: admin
       RABBITMQ_PASSWORD: rabbitmqpass123
       AWS_REGION: us-east-1
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
+      AWS_SQS_QUEUE_URL: ${AWS_SQS_QUEUE_URL}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       LOG_LEVEL: INFO
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
     ports:
@@ -170,6 +174,10 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: admin
       RABBITMQ_PASSWORD: rabbitmqpass123
+      AWS_REGION: us-east-1
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       LOG_LEVEL: INFO
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
     ports:
@@ -196,6 +204,10 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: admin
       RABBITMQ_PASSWORD: rabbitmqpass123
+      AGENT_ORCHESTRATION_URL: http://agent-orchestration:8000
+      EVALUATION_SERVICE_URL: http://evaluation-service:8000
+      EMBEDDING_SERVICE_URL: http://embedding-service:8000
+      RETRIEVAL_SERVICE_URL: http://retrieval-service:8000
       LOG_LEVEL: INFO
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
     ports:

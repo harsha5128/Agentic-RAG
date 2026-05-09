@@ -130,6 +130,11 @@ class Settings(BaseSettings):
     AGENT_TIMEOUT_SECONDS: int = Field(default=300, description="Agent timeout in seconds")
     STATE_PERSISTENCE_ENABLED: bool = Field(default=True, description="Enable state persistence")
     MEMORY_TYPE: MemoryType = Field(default=MemoryType.REDIS, description="Memory backend type")
+    MEMORY_LAST_K: int = Field(default=5, description="Number of recent memories to inject")
+    AGENT_ORCHESTRATION_URL: str = Field(default="http://localhost:8005", description="Agent Orchestration Service URL")
+    EVALUATION_SERVICE_URL: str = Field(default="http://localhost:8007", description="Evaluation Service URL")
+    EMBEDDING_SERVICE_URL: str = Field(default="http://localhost:8003", description="Embedding Service URL")
+    RETRIEVAL_SERVICE_URL: str = Field(default="http://localhost:8004", description="Retrieval Service URL")
     
     # ============================================
     # LLM Configuration

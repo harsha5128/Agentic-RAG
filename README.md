@@ -180,6 +180,13 @@ TEMPERATURE=0.7
 - ✅ Agent communication
 - ✅ Workflow scheduling
 
+### Learning Notes
+- Document parsing now uses LangChain's recursive splitter first, while keeping the custom paragraph chunker as a fallback and teaching example.
+- PDF/DOCX/table extraction now prefers production libraries such as unstructured, pdfplumber, Camelot, pandas, and openpyxl, with custom/PyPDF fallbacks kept as notes.
+- Agent orchestration now uses LangGraph for workflow state, plus local session memory and LangChain chat prompt templates.
+- Tool/function calling is exposed with OpenAI-compatible schemas, and the MCP path is a local adapter that can later be swapped for a real MCP SDK transport.
+- CrewAI and AutoGen are included as role-play/conversation specs for learning; full execution can be enabled later around a configured LLM.
+
 ### Observability
 - ✅ Structured logging (JSON)
 - ✅ Distributed tracing (Jaeger)

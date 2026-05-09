@@ -52,13 +52,15 @@ The Agentic RAG Platform is built on a modern microservices architecture with th
 
 **Key Functions**:
 - Download from S3
-- Parse based on file type (PDF, DOCX, XLSX, etc.)
+- Parse based on file type with production libraries first
+- Use unstructured/pdfplumber/Camelot for PDF layout and tables
+- Use unstructured/python-docx for DOCX and pandas/openpyxl for spreadsheets
 - Apply OCR for scanned documents
 - Support multilingual content
 - Chunk text with overlap
 - Publish parsed content
 
-**Tech Stack**: PyPDF2, python-docx, openpyxl, pytesseract, Pillow
+**Tech Stack**: unstructured, pdfplumber, Camelot, PyPDF2, python-docx, openpyxl, pandas, pytesseract, Pillow
 
 ### 3. Embedding Service
 **Responsibility**: Generate embeddings for text chunks
@@ -90,8 +92,10 @@ The Agentic RAG Platform is built on a modern microservices architecture with th
 **Key Functions**:
 - Build and execute LangGraph workflows
 - Manage agent states
-- Implement memory and context
-- Handle tool/function calls
+- Implement local session memory and LangChain chat prompt templates
+- Handle tool/function calls with OpenAI-compatible schemas
+- Expose a local MCP-style tool adapter for future real MCP transport
+- Provide CrewAI role-play specs and AutoGen conversation specs for learning
 - Persist workflow state
 - Support agent communication
 
@@ -123,6 +127,11 @@ The Agentic RAG Platform is built on a modern microservices architecture with th
 ## Data Flow
 
 ### Document Upload & Indexing Flow
+
+Current implementation note: documents are uploaded directly to S3, and ingestion
+starts from S3 object-created events. The ingestion service no longer receives
+multipart file uploads; it normalizes S3 bucket/key metadata and publishes the
+next processing job.
 
 ```
 1. User uploads document
