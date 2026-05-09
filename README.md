@@ -5,7 +5,7 @@ A production-grade, end-to-end Retrieval Augmented Generation (RAG) system with 
 ## 📋 Overview
 
 This project implements a sophisticated RAG platform that combines:
-- **Document Ingestion Pipeline**: SQS-based async document uploads
+- **Document Ingestion Pipeline**: S3 object-created events with SQS-based async processing
 - **Multi-Agent Orchestration**: LangGraph + CrewAI + AutoGen for complex workflows
 - **Vector Search**: Pinecone/Weaviate/Milvus for semantic search
 - **LLM Integration**: OpenAI and Anthropic models
@@ -17,7 +17,7 @@ This project implements a sophisticated RAG platform that combines:
 
 ### Microservices
 
-1. **Document Ingestion Service** - Uploads and manages document lifecycle
+1. **Document Ingestion Service** - Normalizes S3 object-created events and manages document lifecycle
 2. **Document Parsing Service** - Extracts text, handles OCR, multilingual support
 3. **Embedding Service** - Generates embeddings using OpenAI models
 4. **Retrieval Service** - Vector database operations and similarity search
@@ -28,7 +28,7 @@ This project implements a sophisticated RAG platform that combines:
 ### Data Flow
 
 ```
-Documents → Ingestion → Parsing → Chunking → Embedding → Vector DB
+S3 Document Upload → S3 Event → Ingestion → Parsing → Chunking → Embedding → Vector DB
                                                              ↓
 Query → Processing → Retrieval → Agent Orchestration → LLM → Response
                                                              ↓
@@ -81,11 +81,27 @@ curl http://localhost:9090         # Prometheus
 
 ## 📚 API Examples
 
-### Upload Document
+### Ingest S3 Document Event
 ```bash
-curl -X POST http://localhost:8001/ingest \
-  -F "file=@document.pdf" \
-  -F "user_id=user123"
+curl -X POST http://localhost:8001/s3-events \
+  -H "Content-Type: application/json" \
+  -d '{
+    "Records": [
+      {
+        "eventName": "ObjectCreated:Put",
+        "eventTime": "2026-05-09T12:00:00.000Z",
+        "eventSource": "aws:s3",
+        "s3": {
+          "bucket": { "name": "rag-documents" },
+          "object": {
+            "key": "documents/report.pdf",
+            "size": 1048576,
+            "eTag": "example"
+          }
+        }
+      }
+    ]
+  }'
 ```
 
 ### Query RAG System

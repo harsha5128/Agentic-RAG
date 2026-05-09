@@ -36,14 +36,14 @@ The Agentic RAG Platform is built on a modern microservices architecture with th
 ## Service Responsibilities
 
 ### 1. Document Ingestion Service
-**Responsibility**: Handle document uploads and initial validation
+**Responsibility**: Handle S3 object-created events and initial validation
 
 **Key Functions**:
-- Receive file uploads via HTTP/Multipart
-- Validate file size and type
-- Upload to S3
-- Publish to SQS for async processing
-- Return ingestion status
+- Receive S3 event notifications for uploaded documents
+- Validate object size and supported document type
+- Normalize S3 bucket/key metadata into document records
+- Publish ingestion jobs to SQS for async processing
+- Return event ingestion status
 
 **Tech Stack**: FastAPI, boto3, Pydantic
 

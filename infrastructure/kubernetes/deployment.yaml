@@ -34,6 +34,16 @@ spec:
               key: mongodb-uri
         - name: AWS_REGION
           value: us-east-1
+        - name: S3_BUCKET_NAME
+          valueFrom:
+            secretKeyRef:
+              name: rag-secrets
+              key: s3-bucket-name
+        - name: AWS_SQS_QUEUE_URL
+          valueFrom:
+            secretKeyRef:
+              name: rag-secrets
+              key: aws-sqs-queue-url
         - name: OPENAI_API_KEY
           valueFrom:
             secretKeyRef:
@@ -193,7 +203,7 @@ spec:
   - host: rag.example.com
     http:
       paths:
-      - path: /ingest
+      - path: /s3-events
         pathType: Prefix
         backend:
           service:
@@ -224,6 +234,8 @@ metadata:
 type: Opaque
 stringData:
   mongodb-uri: mongodb://admin:password@mongodb:27017/rag_db
+  s3-bucket-name: rag-documents
+  aws-sqs-queue-url: https://sqs.us-east-1.amazonaws.com/123456789012/agentic-rag-documents
   openai-api-key: sk-xxxxx
   pinecone-api-key: xxxxx
 

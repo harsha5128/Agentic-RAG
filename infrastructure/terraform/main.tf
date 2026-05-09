@@ -266,6 +266,45 @@ resource "aws_sqs_queue" "documents" {
   }
 }
 
+resource "aws_sqs_queue_policy" "documents_s3_events" {
+  queue_url = aws_sqs_queue.documents.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowS3DocumentCreatedEvents"
+        Effect = "Allow"
+        Principal = {
+          Service = "s3.amazonaws.com"
+        }
+        Action   = "sqs:SendMessage"
+        Resource = aws_sqs_queue.documents.arn
+        Condition = {
+          ArnEquals = {
+            "aws:SourceArn" = aws_s3_bucket.documents.arn
+          }
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_s3_bucket_notification" "documents" {
+  bucket = aws_s3_bucket.documents.id
+
+  queue {
+    queue_arn     = aws_sqs_queue.documents.arn
+    events        = ["s3:ObjectCreated:*"]
+    filter_prefix = "documents/"
+  }
+
+  depends_on = [aws_sqs_queue_policy.documents_s3_events]
+}
+
 # Data sources
 data "aws_availability_zones" "available" {
   state = "available"
