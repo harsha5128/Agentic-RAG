@@ -9,7 +9,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
-COPY requirements.txt /app/
+#COPY requirements.txt /app/
+COPY services/document_ingestion/requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy shared utilities
